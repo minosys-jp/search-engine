@@ -1,7 +1,7 @@
 # search-engine
 Search Engine Collections
 
-This project contains the verious types of the search engines.
+This project contains the various types of the search engines.
 
 ## ngram
 There contains the N-gram based search engine programs.<br>
