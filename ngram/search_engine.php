@@ -23,10 +23,17 @@ function init() {
   return $h1;
 }
 
-function engine($h1, $s) {
-  if ($s == '' || mb_strlen($s) < 2) {
-    return null;
+function engine($h1, $words) {
+  $result = "";
+  $sw = explode(" ", $words);
+  for ($i = 0; $i < count($sw); ++$i) {
+    $s = $sw[$i];
+    $result = engine1($h1, $s, $result);
   }
+  return $result;
+}
+
+function engine1($h1, $s, $result) {
   $r = null;
   $c2 = '';
   $h2 = fopen("search_classify.bin", "rb");
@@ -62,16 +69,25 @@ function engine($h1, $s) {
           }
           $itemCount = $itemLen['len'] >> 2;
           $candidate = [];
+          if ($result != null) {
+            if (isset($result[$aoffset['offset']])) {
+              $candidate = $result[$aoffset['offset']];
+            } else {
+              fseek($h2, $itemLen['len'], SEEK_CUR);
+              $itemLen = unpack('Vlen', fread($h2, 4));
+              continue;
+            } 
+          }
           for ($j = 0; $j < $itemCount; ++$j) {
             $pos = unpack('Vpos', fread($h2, 4));
             if ($r != null) {
               for ($k = 0; $k < count($canold); ++$k) {
-                if ($canold[$k] + 1 == $pos['pos']) {
-                  $candidate[] = $pos['pos'];
+                if ($canold[$k][0] + 1 == $pos['pos']) {
+                  $candidate[] = [$pos['pos'], mb_strlen($s)];
                 }
               }
             } else {
-              $candidate[] = $pos['pos'];
+              $candidate[] = [$pos['pos'], mb_strlen($s)];
             }
           }
           $rnew[$aoffset['offset']] = $candidate;
@@ -117,9 +133,9 @@ function search($s) {
 
     $div = "<div>";
     $div .= "<h4><a href='" . $link . "'>" . $title . "</a></h4>";
-    foreach ($value as $i => $pos) {
-      $xpos = $pos + 1;
-      $ppos = $xpos - mb_strlen($s);
+    foreach ($value as $i => $pospair) {
+      $xpos = $pospair[0] + 1;
+      $ppos = $xpos - $pospair[1];
       $coff1 = 15;
       $st = $ppos - $coff1;
       if ($st < 0) {
@@ -140,7 +156,7 @@ function search($s) {
         $coff2 = $ed - $xpos;
       }
       if ($coff2 > 0) {
-        $part .= mb_substr($body, $xpos, $ed - $pos);
+        $part .= mb_substr($body, $xpos, $ed - $pospair[0]);
       }
 
       $div .= "<div>";
