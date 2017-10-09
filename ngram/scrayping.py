@@ -50,13 +50,14 @@ class AnchorList():
 
 # strip HTML in plain tex
 class StripperClass(HTMLParser):
-	def __init__(self):
+	def __init__(self, cp):
 		HTMLParser.__init__(self)
 		self.anchors = AnchorList()
 		self.title = ""
 		self.body = ""
 		self.inTitle = False
 		self.inBody = False
+		self.currentPath = cp
 
 	def handle_starttag(self, tag, attrs):
 		if tag == 'a' or tag == 'A':
@@ -87,13 +88,20 @@ class Pass1():
 		self.adict = {}
 
 	def run1(self, url):
-		st = StripperClass()
+		st = StripperClass(url)
 		absurl = absURL(url)
 		with urlopen(absurl) as handle:
 			r = handle.read()
 			st.feed(r.decode('utf-8'))
 			for a in st.anchors.alist:
-				if a.find("blog") < 0:
+				if a.startswith("..") or a.startswith("./"):
+					continue
+				if not a == "" and not a.startswith("/") and url != "/":
+					rf = url.rfind("/")
+					if rf >= 0:
+						a = url[:rf] + "/" + a
+					print(a)
+				if a.find("blog") < 0 and a.find(".txt") < 0:
 					self.alist.appendURL(a)
 			rurl = self.alist.getURL(url)
 			self.alist.adic[rurl] = 1
@@ -224,7 +232,7 @@ class Pass2():
 	def run2(self, a, h1, h2, h3):
 		with urlopen(absURL(a)) as h:
 			r = h.read()
-			s = StripperClass()
+			s = StripperClass(a)
 
 			# HTML を解析する
 			s.feed(r.decode('utf-8'))
