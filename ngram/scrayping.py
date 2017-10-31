@@ -3,25 +3,70 @@
 
 from urllib.request import urlopen
 from urllib.parse import urlparse
+from urllib.parse import urljoin
 from html.parser import HTMLParser
 from struct import pack
+from re import match
 
-# relative URL to absolute URL
-def absURL(url):
-	absurl = absURLInt(url)
-	print("Try URL:" + absurl)
-	return absurl
+def contract(path):
+	m = match("^(http|https)://([A-Za-z0-9._\-]+)(.*)", path)
+	if m is None:
+		return path
+	mg = m.groups()
+	s = mg[2].split("/")
+	sj = []
+	for si in s:
+		if si == "..":
+			sj.pop()
+		elif si != "." and si != "":
+			sj.append(si)
+	path = "/".join(sj)
+	if not path.startswith("/"):
+		path = "/" + path
+	sz = mg[0] + "://" + mg[1] + path
+	return sz
+	
 
-def absURLInt(url):
-	o = urlparse(url)
-	if o.netloc == "":
-		if not url.startswith("/"):
-			slash = "/"
-		else:
-			slash = ""
-		return "https://www.teqstock.tokyo" + slash + url
-	else:
-		return url
+def getDirectory(path):
+	m = match("^(http|https)://([A-Za-z0-9._\-]+)(.*)", path)
+	if m is None:
+		return path
+	mg = m.groups()
+	s = mg[2].split("/")
+	sj = []
+	for si in s:
+		if si == "..":
+			sj.pop()
+		elif si != "." and si != "":
+			if si.find(".") < 0 and si.find("#") < 0:
+				sj.append(si)
+	path = "/".join(sj)
+	if not path.startswith("/"):
+		path = "/" + path
+	sz = mg[0] + "://" + mg[1] + path
+	return sz
+
+def getFilePart(path):
+	while path.endswith("/"):
+		path = path[0:len(path) - 1]
+	r = path.rfind("/")
+	if r >= 0:
+		path = path[r+1:]
+	if path is None:
+		path = ""
+	return path
+
+def getURL(last, rurl):
+	if rurl.startswith("https://") or rurl.startswith("http://"):
+		return rurl
+	d = getDirectory(last)
+	if d.endswith("/"):
+		d = d[:len(d) - 1]
+	if rurl.startswith("/"):
+		rurl = rurl[1:]
+	url = d + "/" + rurl
+	url = contract(url)
+	return url
 
 # create &quot;a&quot; list
 class AnchorList():
@@ -29,40 +74,31 @@ class AnchorList():
 		self.alist = []
 		self.adic = {}
 
-	def getURL(self, url):
-		o = urlparse(url)
-		if o.netloc == "" or o.netloc.startswith("www.teqstock.tokyo"):
-			if o.path == "":
-				return "/"
-			else:
-				return o.path
-		else:
-			return None
-
-
 	def appendURL(self, url):
-		rurl = self.getURL(url)
-		if rurl is None:
-			return
-		if not rurl in self.adic:
-			self.adic[rurl] = 0
-			self.alist.append(rurl)
+		if not url in self.adic:
+			self.adic[url] = 0
+			self.alist.append(url)
 
 # strip HTML in plain tex
 class StripperClass(HTMLParser):
-	def __init__(self):
+	def __init__(self, baseURL):
 		HTMLParser.__init__(self)
 		self.anchors = AnchorList()
 		self.title = ""
 		self.body = ""
 		self.inTitle = False
 		self.inBody = False
+		self.baseURL = baseURL
+		self.parsed = urlparse(baseURL)
 
 	def handle_starttag(self, tag, attrs):
 		if tag == 'a' or tag == 'A':
 			for (aname, aval) in attrs:
 				if aname == 'href':
-					self.anchors.appendURL(aval)
+					ref = getURL(self.baseURL, aval)
+					o = urlparse(ref)
+					if o.netloc == self.parsed.netloc:
+						self.anchors.appendURL(ref)
 		if tag == "title" or tag == "TITLE":
 			self.inTitle = True
 		if tag == "body" or tag == "BODY":
@@ -85,18 +121,31 @@ class Pass1():
 	def __init__(self):
 		self.alist = AnchorList()
 		self.adict = {}
+		self.parsed = None
+
+	def canAppend(self, a):
+		if a is None:
+			return False
+		if not a.endswith(".html"):
+			return False
+		if a.find("blog") >= 0:
+			return False
+		o = urlparse(a)
+		if o.netloc != self.parsed.netloc:
+			return False
+		return True
 
 	def run1(self, url):
-		st = StripperClass()
-		absurl = absURL(url)
-		with urlopen(absurl) as handle:
+		print("run1:" + url)
+		st = StripperClass(url)
+		with urlopen(url) as handle:
 			r = handle.read()
 			st.feed(r.decode('utf-8'))
 			for a in st.anchors.alist:
-				if a.find("blog") < 0:
-					self.alist.appendURL(a)
-			rurl = self.alist.getURL(url)
-			self.alist.adic[rurl] = 1
+				if self.canAppend(a):
+					abspath = getURL(url, a)
+					self.alist.appendURL(abspath)
+			self.alist.adic[url] = 1
 
 	def nextURL(self):
 		for url in self.alist.adic.keys():
@@ -106,8 +155,8 @@ class Pass1():
 		return None
 
 	def run(self, url):
-		rurl = self.alist.getURL(url)
-		self.alist.appendURL(rurl)
+		self.alist.appendURL(url)
+		self.parsed = urlparse(url)
 		while True:
 			nexturl = self.nextURL()
 			if nexturl is None:
@@ -221,10 +270,10 @@ class Pass2():
 			count = count + 1
 				
 
-	def run2(self, a, h1, h2, h3):
-		with urlopen(absURL(a)) as h:
+	def run2(self, pass1, a, h1, h2, h3):
+		with urlopen(a) as h:
 			r = h.read()
-			s = StripperClass()
+			s = StripperClass(a)
 
 			# HTML を解析する
 			s.feed(r.decode('utf-8'))
@@ -241,7 +290,8 @@ class Pass2():
 
 	def run1(self, pass1, h1, h2, h3):
 		for a in pass1.alist.alist:
-			self.run2(a, h1, h2, h3)
+			if a is not None:
+				self.run2(pass1, a, h1, h2, h3)
 		self.writeHash(h1, h2)
 
 	def run(self, pass1):
@@ -253,7 +303,8 @@ class Pass2():
 
 # main program
 pass1 = Pass1()
-pass1.run('https://www.teqstock.tokyo/')
+pass1.run('https://www.teqstock.tokyo')
+print("*** pass1 passed")
 pass2 = Pass2()
 pass2.run(pass1)
 print(pass2.chash[pass2.myhash('t', 'o')])
