@@ -248,24 +248,18 @@ class Pass2():
 		
 	def calc_probability(self, aoffset, body):
 		c2 = ''
-		# pass1
+		lenbody1 = len(body) - 1
+		if lenbody1 <= 0:
+			return
+
 		for c in body:
 			c1 = c2
 			c2 = c
 			if c1 != '':
 				page = self.createPage((c1, c2))
 				if not (aoffset in page.keys()):
-					page[aoffset] = 0
-				page[aoffset] = page[aoffset] + 1
-		lenbody1 = len(body) - 1
-		# pass2
-		c2 = ''
-		for c in body:
-			c1 = c2
-			c2 = c
-			if c1 != '':
-				page = self.createPage((c1, c2))
-				page[aoffset] = page[aoffset] / lenbody1
+					page[aoffset] = 0.0
+				page[aoffset] = page[aoffset] + 1.0/lenbody1
 
 	def run2(self, pass1, a, h1, h2, h3):
 		with urlopen(a) as h:
@@ -283,7 +277,7 @@ class Pass2():
 			self.docoffset = self.docoffset + lenlink + lentitle + lenbody
 
 			# 文字セットの出現確率を求める
-			self.calc_probability(aoffset, body)
+			self.calc_probability(aoffset, body) 
 
 	def run1(self, pass1, h1, h2, h3):
 		for a in pass1.alist.alist:
@@ -304,4 +298,4 @@ pass1.run('https://www.teqstock.tokyo')
 print("*** pass1 passed")
 pass2 = Pass2()
 pass2.run(pass1)
-print(pass2.chash[pass2.myhash('t', 'o')])
+print(pass2.chash[pass2.myhash('ッ', 'ト')])

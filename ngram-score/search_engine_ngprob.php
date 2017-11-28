@@ -93,7 +93,7 @@ function search($s) {
   $r = "";
   $h3 = fopen("search_ngprob_docs.bin", "rb");
   foreach ($result as $key => $value) {
-    if ($value < 1e-8) {
+    if ($value < 1e-3) {
       break;
     }
     fseek($h3, $key);
@@ -105,7 +105,7 @@ function search($s) {
     $body = readText($h3);
 
     $div = "<div>";
-    $div .= sprintf("<h4><a href='%s'>%s</a> (score:%.8f)</h4>\r\n", $link, $title, $value);
+    $div .= sprintf("<h4><a href='%s'>%s</a> (score:%.5f)</h4>\r\n", $link, $title, $value);
     $div .= "</div>\r\n";
     $r .= $div;
   }
